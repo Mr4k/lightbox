@@ -24,7 +24,7 @@ def castRay(position, ray):
 	if intersectionDepth < 0:
 		return[0,0,0]
 	else:
-		return [0.5,0.5,0.5]
+		return np.clip(1 - np.linalg.norm(ray * intersectionDepth) / 10,0,1)
 
 #cast the rays
 for xx in xrange(RESOLUTION[0]):
