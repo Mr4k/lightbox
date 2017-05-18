@@ -2,7 +2,7 @@ import numpy as np
 import PIL
 import matplotlib.pyplot as plt
 
-RESOLUTION = (600, 400)
+RESOLUTION = (1270, 800)
 
 screenPixels = np.zeros((RESOLUTION[1],RESOLUTION[0], 3))
 
@@ -16,7 +16,7 @@ cameraPosition = [0,0,0]
 ############
 
 class Material:
-	surfaceSpecularity = 0.2
+	surfaceSpecularity = 0.15
 	color = [1,1,1]
 	
 	def sampleTexture(self, u, v):
@@ -113,12 +113,14 @@ def castRay(world, position, ray, bounce, maxBounce = 4):
 			if bounce > 0:
 				specularitySamples = 1
 			#To do actually add texturing functionality
-			color = mat.sampleTexture(0,0)
+			color = material.sampleTexture(0,0)
 			incomingColor = np.array([0.0,0.0,0.0])
 			for i in xrange(specularitySamples):
 				nNorm = intersectionNormal
 				if specularitySamples > 1:
-					mod = np.random.normal(0,0.1 * (1 - mat.surfaceSpecularity)**2,3)
+					#mod = np.random.normal(0,0.1 * (1 - mat.surfaceSpecularity)**2,3)
+					#the second array if a randomized offset
+					mod = np.sin(intersectionDepth * ray * mat.surfaceSpecularity + np.array([0.3,125.5,10])) * 0.1 * (1 - mat.surfaceSpecularity)
 					nNorm += mod
 					nNorm /= np.linalg.norm(nNorm)
 				newRayDirection = ray + 2 * np.dot(-ray, nNorm) * nNorm
@@ -126,7 +128,7 @@ def castRay(world, position, ray, bounce, maxBounce = 4):
 				incomingColor += castRay(world, intersectionDepth * ray, newRayDirection, bounce + 1) / float(specularitySamples)
 			shadowColor = castRay(world, intersectionDepth * ray, -sunDirection, maxBounce)
 			#shadowColor = 0
-			incomingColor = mat.surfaceSpecularity * incomingColor
+			incomingColor = material.surfaceSpecularity * incomingColor
 			return (incomingColor + shadowColor) * np.array(color)
 
 
@@ -147,15 +149,19 @@ mirrorMat = Material()
 mirrorMat.color = [1,1,1]
 mirrorMat.surfaceSpecularity = 0.95
 
-materials = [redMat, blueMat, greenMat, mirrorMat]
+materials = [redMat, blueMat, greenMat, mirrorMat, mirrorMat, mirrorMat]
 
-world = []
+planeMat = Material()
+planeMat.color = [0.5,0.5,0.5]
+planeMat.surfaceSpecularity = 0.3
 
-for i in xrange(8):
-	world.append((Sphere((np.random.rand(3) - 0.5) * 2 + np.array([0,0,0]), 0.2), materials[i % 4]))
-	world[-1][0].spherePosition[1] = (np.random.rand() - 0.5) * 0.5
+world = [(Plane(1.1), planeMat)]
+
+for i in xrange(9):
+	world.append((Sphere((np.random.rand(3) - 0.5) * 2 + np.array([0,0,0]), 0.2), materials[np.random.randint(6)]))
+	world[-1][0].spherePosition[1] = (np.random.rand() - 0.5) - 0.1
 	world[-1][0].spherePosition[2] = (np.random.rand() - 0.5) * 0.5 + 4
-	print world[-1][0].spherePosition
+	print world[-1][1].color
 
 ##########
 # Cast the rays
