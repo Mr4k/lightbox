@@ -1,2 +1,2 @@
-# rtrace
+# lightbox
 ![Render Result](renderResult.png)
