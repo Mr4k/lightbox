@@ -1,8 +1,9 @@
 import numpy as np
 import PIL
 import matplotlib.pyplot as plt
+import noise
 
-RESOLUTION = (1270, 800)
+RESOLUTION = (1280, 720)
 
 screenPixels = np.zeros((RESOLUTION[1],RESOLUTION[0], 3))
 
@@ -18,9 +19,11 @@ cameraPosition = [0,0,0]
 class Material:
 	surfaceSpecularity = 0.15
 	color = [1,1,1]
-	
-	def sampleTexture(self, u, v):
+
+	def defaultSampleTexture(self, pos):
 		return self.color
+
+	sampleTexture = defaultSampleTexture
 
 class Geom:
 	def hitsRay(self, ray, cameraPos):
@@ -43,7 +46,7 @@ class Plane(Geom):
 		if ray.dot([0,-1,0]) == 0:
 			intersectionDepth = -1
 		else:
-			intersectionDepth = (plane - cameraPos[1]) / ray[1]
+			intersectionDepth = (self.y - cameraPos[1]) / ray[1]
 			intersectionNormal = np.array([0,-1.0,0])
 		return (intersectionDepth, intersectionNormal)
 
@@ -74,13 +77,16 @@ def castRay(world, position, ray, bounce, maxBounce = 4):
 	spherePos = [0,0.4,7]
 	sphereRadius = 0.5
 
-	sunDirection = [0.5, 0.7, -1]
+	sunDirection = [0.8, 0.7, 0.5]
 	sunDirection = sunDirection / np.linalg.norm(sunDirection)
 	skyColor = np.array([138,229,255]) / 255.0
-	sunColor = np.array([1,1,1])
-	sunStrength = 0.4
+	sunColor = np.array([1.0,1.0,1.0])
+	sunStrength = 0.05
+	sunAmbientPower = 0.05
 
 	epsilon = 0.01
+
+	farPlane = 15
 
 
 	specularitySamples = 10
@@ -104,16 +110,16 @@ def castRay(world, position, ray, bounce, maxBounce = 4):
 			intersectionNormal = normal
 			material = mat
 
-	if intersectionDepth < epsilon:
-		return sunColor * sunStrength * (np.dot(ray, sunDirection) / 2.0 + 0.5)**3 + skyColor
+	if intersectionDepth < epsilon or intersectionDepth * ray[2] > farPlane:
+		return sunColor * sunStrength * (np.dot(ray, sunDirection) / 2.0 + 0.5)**2 + skyColor
 	else:
 		if bounce == maxBounce:
-			return np.array([0,0,0])
+			return np.array([0,0.0,0])
 		else:
 			if bounce > 0:
 				specularitySamples = 1
 			#To do actually add texturing functionality
-			color = material.sampleTexture(0,0)
+			color = material.sampleTexture(ray * intersectionDepth)
 			incomingColor = np.array([0.0,0.0,0.0])
 			for i in xrange(specularitySamples):
 				nNorm = intersectionNormal
@@ -127,6 +133,7 @@ def castRay(world, position, ray, bounce, maxBounce = 4):
 				newRayDirection /= np.linalg.norm(newRayDirection)
 				incomingColor += castRay(world, intersectionDepth * ray, newRayDirection, bounce + 1) / float(specularitySamples)
 			shadowColor = castRay(world, intersectionDepth * ray, -sunDirection, maxBounce)
+			shadowColor += sunAmbientPower * sunColor
 			#shadowColor = 0
 			incomingColor = material.surfaceSpecularity * incomingColor
 			return (incomingColor + shadowColor) * np.array(color)
@@ -152,12 +159,25 @@ mirrorMat.surfaceSpecularity = 0.95
 materials = [redMat, blueMat, greenMat, mirrorMat, mirrorMat, mirrorMat]
 
 planeMat = Material()
-planeMat.color = [0.5,0.5,0.5]
-planeMat.surfaceSpecularity = 0.3
+planeMat.color = [0.4,0.4,0.4]
+planeMat.surfaceSpecularity = 0.14
 
-world = [(Plane(1.1), planeMat)]
+def marble(pos):
+	return np.sin(pos[0] * 3 + pos[1] * 7 + pos[2] * 4.5 + noise.snoise3(pos[0] * 12, pos[1] * 12, pos[2] * 12) * 3) * 0.05 + 0.8
 
-for i in xrange(9):
+def checkerBoard(pos):
+	scale = 2
+	scaleOverTwo = scale / 2.0
+	return float(((pos[0] % scale < scaleOverTwo) and (pos[1] % scale < scaleOverTwo)  and (pos[2] % scale < scaleOverTwo))
+	 or (pos[0] % scale > scaleOverTwo) and (pos[1] % scale > scaleOverTwo)  and (pos[2] % scale < scaleOverTwo)
+	 or ((pos[0] % scale > scaleOverTwo) and (pos[1] % scale < scaleOverTwo)  and (pos[2] % scale > scaleOverTwo)) 
+	 or ((pos[0] % scale < scaleOverTwo) and (pos[1] % scale > scaleOverTwo)  and (pos[2] % scale > scaleOverTwo))) * 0.65 + 0.35
+
+planeMat.sampleTexture = checkerBoard
+
+world = [(Plane(0.7), planeMat)]
+
+for i in xrange(5):
 	world.append((Sphere((np.random.rand(3) - 0.5) * 2 + np.array([0,0,0]), 0.2), materials[np.random.randint(6)]))
 	world[-1][0].spherePosition[1] = (np.random.rand() - 0.5) - 0.1
 	world[-1][0].spherePosition[2] = (np.random.rand() - 0.5) * 0.5 + 4
