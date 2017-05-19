@@ -19,6 +19,8 @@ cameraPosition = [0,0,0]
 class Material:
 	surfaceSpecularity = 0.15
 	color = [1,1,1]
+	transparency = 0
+	refractionIndex = 1
 
 	def defaultSampleTexture(self, pos):
 		return self.color
@@ -72,7 +74,7 @@ class Sphere(Geom):
 			intersectionNormal /= np.linalg.norm(intersectionNormal)
 			return (big, intersectionNormal)
 
-def castRay(world, position, ray, bounce, maxBounce = 4):
+def castRay(world, position, ray, bounce, isShadowRay = False, refractionIndex = 1.0, maxBounce = 4):
 	plane = 1
 	spherePos = [0,0.4,7]
 	sphereRadius = 0.5
@@ -82,14 +84,11 @@ def castRay(world, position, ray, bounce, maxBounce = 4):
 	skyColor = np.array([138,229,255]) / 255.0
 	sunColor = np.array([1.0,1.0,1.0])
 	sunStrength = 0.05
-	sunAmbientPower = 0.05
+	sunAmbientPower = 0.4
 
 	epsilon = 0.01
 
 	farPlane = 15
-
-
-	specularitySamples = 10
 
 
 	material = None
@@ -109,34 +108,49 @@ def castRay(world, position, ray, bounce, maxBounce = 4):
 			intersectionDepth = candidateDepth
 			intersectionNormal = normal
 			material = mat
+			if isShadowRay:
+				break
 
 	if intersectionDepth < epsilon or intersectionDepth * ray[2] > farPlane:
-		return sunColor * sunStrength * (np.dot(ray, sunDirection) / 2.0 + 0.5)**2 + skyColor
+		if isShadowRay:
+			return sunColor * sunStrength 
+		else:
+			return sunColor * sunStrength * (np.dot(ray, sunDirection) / 2.0 + 0.5)**2 + skyColor
 	else:
-		if bounce == maxBounce:
+		if bounce >= maxBounce:
 			return np.array([0,0.0,0])
 		else:
-			if bounce > 0:
-				specularitySamples = 1
-			#To do actually add texturing functionality
+			"""if intersectionDepth < 0.1:
+				print intersectionDepth"""
+			#Do refraction
+			transparencyColor = 0.0
+			if material.transparency > 0:
+				newRayDirection = (material.refractionIndex / refractionIndex) * (ray - np.dot(ray, intersectionNormal) * intersectionNormal) + np.dot(ray, intersectionNormal) * intersectionNormal
+				newRayDirection /= np.linalg.norm(newRayDirection)
+				transparencyColor = (material.transparency) * castRay(world, intersectionDepth * ray + position, newRayDirection, bounce + 0.1, False, material.refractionIndex)
+
+			if isShadowRay:
+				return np.array([0,0.0,0])
+
 			color = material.sampleTexture(ray * intersectionDepth)
 			incomingColor = np.array([0.0,0.0,0.0])
-			for i in xrange(specularitySamples):
-				nNorm = intersectionNormal
-				if specularitySamples > 1:
-					#mod = np.random.normal(0,0.1 * (1 - mat.surfaceSpecularity)**2,3)
-					#the second array if a randomized offset
-					mod = np.sin(intersectionDepth * ray * mat.surfaceSpecularity + np.array([0.3,125.5,10])) * 0.1 * (1 - mat.surfaceSpecularity)
-					nNorm += mod
-					nNorm /= np.linalg.norm(nNorm)
-				newRayDirection = ray + 2 * np.dot(-ray, nNorm) * nNorm
-				newRayDirection /= np.linalg.norm(newRayDirection)
-				incomingColor += castRay(world, intersectionDepth * ray, newRayDirection, bounce + 1) / float(specularitySamples)
-			shadowColor = castRay(world, intersectionDepth * ray, -sunDirection, maxBounce)
+
+			nNorm = intersectionNormal
+			if bounce > 0:
+				#mod = np.random.normal(0,0.1 * (1 - mat.surfaceSpecularity)**2,3)
+				#the second array if a randomized offset
+				mod = np.sin(intersectionDepth * ray * mat.surfaceSpecularity + np.array([0.3,125.5,10])) * 0.1 * (1 - mat.surfaceSpecularity)
+				nNorm += mod
+				nNorm /= np.linalg.norm(nNorm)
+			newRayDirection = ray + 2 * np.dot(-ray, nNorm) * nNorm
+			newRayDirection /= np.linalg.norm(newRayDirection)
+			incomingColor += castRay(world, position + intersectionDepth * ray, newRayDirection, bounce + 1)
+
+			shadowColor = castRay(world, position + intersectionDepth * ray, -sunDirection, maxBounce, True)
 			shadowColor += sunAmbientPower * sunColor
 			#shadowColor = 0
 			incomingColor = material.surfaceSpecularity * incomingColor
-			return (incomingColor + shadowColor) * np.array(color)
+			return (1-material.transparency) * ((incomingColor + shadowColor) * np.array(color)) + transparencyColor
 
 
 ##########
@@ -155,6 +169,12 @@ greenMat.color = [0.1,1,0.1]
 mirrorMat = Material()
 mirrorMat.color = [1,1,1]
 mirrorMat.surfaceSpecularity = 0.95
+
+glassMat = Material()
+glassMat.color = [1,1,1]
+glassMat.surfaceSpecularity = 0.85
+glassMat.refrationIndex = 20
+glassMat.transparency = 0.8
 
 materials = [redMat, blueMat, greenMat, mirrorMat, mirrorMat, mirrorMat]
 
@@ -175,13 +195,16 @@ def checkerBoard(pos):
 
 planeMat.sampleTexture = checkerBoard
 
-world = [(Plane(0.7), planeMat)]
+#
+world = [(Plane(0.7), planeMat), (Sphere(np.array([0,0.0,4]), 0.5), glassMat), (Sphere(np.array([-1,0.0,8]), 0.7), redMat)]
 
-for i in xrange(5):
+"""for i in xrange(5):
 	world.append((Sphere((np.random.rand(3) - 0.5) * 2 + np.array([0,0,0]), 0.2), materials[np.random.randint(6)]))
 	world[-1][0].spherePosition[1] = (np.random.rand() - 0.5) - 0.1
 	world[-1][0].spherePosition[2] = (np.random.rand() - 0.5) * 0.5 + 4
-	print world[-1][1].color
+	print world[-1][1].color"""
+
+
 
 ##########
 # Cast the rays
@@ -192,7 +215,9 @@ for xx in xrange(RESOLUTION[0]):
 		ray = np.array([np.tan((xx/float(RESOLUTION[0]) - 0.5) * FOV / 2.0), 
 			np.tan((yy/float(RESOLUTION[1]) - 0.5) * FOV / 2.0 * 1.0 / aspect), 1])
 		ray /= np.linalg.norm(ray)
-		screenPixels[yy, xx] = castRay(world, cameraPosition, ray, 0)
+		screenPixels[yy, xx] = castRay(world, cameraPosition, ray, False)
+
+castRay(world, cameraPosition, np.array([0,0,1]), False)
 
 screenPixels = np.clip(screenPixels,0,1)
 screenPixels *= 255
