@@ -21,6 +21,7 @@ class Material:
 	color = [1,1,1]
 	transparency = 0
 	refractionIndex = 1
+	internallySampleTexture = False
 
 	def defaultSampleTexture(self, pos):
 		return self.color
@@ -81,10 +82,21 @@ def castRay(world, position, ray, bounce, isShadowRay = False, refractionIndex =
 
 	sunDirection = [0.8, 0.7, 0.5]
 	sunDirection = sunDirection / np.linalg.norm(sunDirection)
+
+	####
+	#TO DO MOVE THIS TO A BETTER SECTION LATER
+	def sunSetTexture(ray):
+		colors = np.array([[157, 211, 247], [189,101,151], [205,201,197], [240,230,238], [157, 211, 247]]) / 256.0
+		cloudIntensity = np.clip((noise.snoise3(ray[0] * 3.7,ray[1] * 10,ray[2] * 3.7, 6)+0.5 + 0.2),0,1)
+		color = np.apply_along_axis(lambda x: np.interp(ray.dot(np.array([0,-1,0])), np.arange(0,0.3,0.3/5.0), x), 0, colors)
+		return (color - np.array([157, 211, 247]) / 256.0) * cloudIntensity + np.array([157, 211, 247]) / 256.0
+
+
+	skyTextureSample = sunSetTexture
 	skyColor = np.array([138,229,255]) / 255.0
 	sunColor = np.array([1.0,1.0,1.0])
-	sunStrength = 0.05
-	sunAmbientPower = 0.4
+	sunStrength = 0.2
+	sunAmbientPower = 0.2
 
 	epsilon = 0.01
 
@@ -115,7 +127,7 @@ def castRay(world, position, ray, bounce, isShadowRay = False, refractionIndex =
 		if isShadowRay:
 			return sunColor * sunStrength 
 		else:
-			return sunColor * sunStrength * (np.dot(ray, sunDirection) / 2.0 + 0.5)**2 + skyColor
+			return sunColor * sunStrength * (np.dot(ray, sunDirection) / 2.0 + 0.5)**2 + skyTextureSample(ray)
 	else:
 		if bounce >= maxBounce:
 			return np.array([0,0.0,0])
@@ -197,6 +209,7 @@ planeMat.sampleTexture = checkerBoard
 
 #
 world = [(Plane(0.7), planeMat), (Sphere(np.array([0,0.0,4]), 0.5), glassMat), (Sphere(np.array([-1,0.0,8]), 0.7), redMat)]
+#world = []
 
 """for i in xrange(5):
 	world.append((Sphere((np.random.rand(3) - 0.5) * 2 + np.array([0,0,0]), 0.2), materials[np.random.randint(6)]))
