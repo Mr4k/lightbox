@@ -95,8 +95,8 @@ def castRay(world, position, ray, bounce, isShadowRay = False, refractionIndex =
 	skyTextureSample = sunSetTexture
 	skyColor = np.array([138,229,255]) / 255.0
 	sunColor = np.array([1.0,1.0,1.0])
-	sunStrength = 0.2
-	sunAmbientPower = 0.2
+	sunStrength = 0.15
+	sunAmbientPower = 0.1
 
 	epsilon = 0.01
 
@@ -127,13 +127,11 @@ def castRay(world, position, ray, bounce, isShadowRay = False, refractionIndex =
 		if isShadowRay:
 			return sunColor * sunStrength 
 		else:
-			return sunColor * sunStrength * (np.dot(ray, sunDirection) / 2.0 + 0.5)**2 + skyTextureSample(ray)
+			return sunColor * sunStrength * (np.dot(ray, sunDirection) / 2.0 + 0.5) + skyTextureSample(ray)
 	else:
 		if bounce >= maxBounce:
 			return np.array([0,0.0,0])
 		else:
-			"""if intersectionDepth < 0.1:
-				print intersectionDepth"""
 			#Do refraction
 			transparencyColor = 0.0
 			if material.transparency > 0:
@@ -149,7 +147,6 @@ def castRay(world, position, ray, bounce, isShadowRay = False, refractionIndex =
 
 			nNorm = intersectionNormal
 			if bounce > 0:
-				#mod = np.random.normal(0,0.1 * (1 - mat.surfaceSpecularity)**2,3)
 				#the second array if a randomized offset
 				mod = np.sin(intersectionDepth * ray * mat.surfaceSpecularity + np.array([0.3,125.5,10])) * 0.1 * (1 - mat.surfaceSpecularity)
 				nNorm += mod
@@ -162,7 +159,7 @@ def castRay(world, position, ray, bounce, isShadowRay = False, refractionIndex =
 			shadowColor += sunAmbientPower * sunColor
 			#shadowColor = 0
 			incomingColor = material.surfaceSpecularity * incomingColor
-			return (1-material.transparency) * ((incomingColor + shadowColor) * np.array(color)) + transparencyColor
+			return (1 - material.transparency) * ((incomingColor + shadowColor) * np.array(color)) + transparencyColor
 
 
 ##########
@@ -184,9 +181,9 @@ mirrorMat.surfaceSpecularity = 0.95
 
 glassMat = Material()
 glassMat.color = [1,1,1]
-glassMat.surfaceSpecularity = 0.85
+glassMat.surfaceSpecularity = 0.9
 glassMat.refrationIndex = 20
-glassMat.transparency = 0.8
+glassMat.transparency = 0.5
 
 materials = [redMat, blueMat, greenMat, mirrorMat, mirrorMat, mirrorMat]
 
@@ -207,15 +204,15 @@ def checkerBoard(pos):
 
 planeMat.sampleTexture = checkerBoard
 
-#
-world = [(Plane(0.7), planeMat), (Sphere(np.array([0,0.0,4]), 0.5), glassMat), (Sphere(np.array([-1,0.0,8]), 0.7), redMat)]
-#world = []
+#world = [(Plane(0.7), planeMat), (Sphere(np.array([0,0.0,4]), 0.5), glassMat), (Sphere(np.array([-1,0.0,8]), 0.7), redMat)]
 
-"""for i in xrange(5):
-	world.append((Sphere((np.random.rand(3) - 0.5) * 2 + np.array([0,0,0]), 0.2), materials[np.random.randint(6)]))
+world = [(Plane(0.7), planeMat)]
+
+for i in xrange(5):
+	world.append((Sphere((np.random.rand(3) - 0.5) * 2 + np.array([0,0,0]), 0.2), glassMat))
 	world[-1][0].spherePosition[1] = (np.random.rand() - 0.5) - 0.1
 	world[-1][0].spherePosition[2] = (np.random.rand() - 0.5) * 0.5 + 4
-	print world[-1][1].color"""
+	#print world[-1][1].color
 
 
 
@@ -223,7 +220,7 @@ world = [(Plane(0.7), planeMat), (Sphere(np.array([0,0.0,4]), 0.5), glassMat), (
 # Cast the rays
 ##########
 for xx in xrange(RESOLUTION[0]):
-	print xx
+	#print xx
 	for yy in xrange(RESOLUTION[1]):
 		ray = np.array([np.tan((xx/float(RESOLUTION[0]) - 0.5) * FOV / 2.0), 
 			np.tan((yy/float(RESOLUTION[1]) - 0.5) * FOV / 2.0 * 1.0 / aspect), 1])
